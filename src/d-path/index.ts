@@ -142,6 +142,79 @@ type CreatePathOverloads = TupleToIntersection<CreatePathOverloadsTuple>;
 // 用于 addPath 方法的重载签名
 type AddPathOverloads = TupleToIntersection<AddPathOverloadsTuple>;
 
+// 根据 SVG 命令名称返回对应命令参数组成的元祖类型
+type PathDescriptionArgs<C extends Command> = C extends "l" | "L"
+  ? [number, number]
+  : C extends "h" | "H"
+    ? [number]
+    : C extends "v" | "V"
+      ? [number]
+      : C extends "c" | "C"
+        ? [number, number, number, number, number, number]
+        : C extends "s" | "S"
+          ? [number, number, number, number]
+          : C extends "q" | "Q"
+            ? [number, number, number, number]
+            : C extends "t" | "T"
+              ? [number, number]
+              : C extends "a" | "A"
+                ? [number, number, number, 0 | 1, 0 | 1, number, number]
+                : never;
+
+// 路径描述对象，包含单个命令及对应的参数
+interface PathDescriptionMember<C extends AbsoluteCommand> {
+  start: Coord;
+  end: Coord;
+  command: C;
+  args: PathDescriptionArgs<C>;
+}
+
+interface PathDescriptionBehavior {
+  getSegment: () => string;
+  toString: () => string;
+}
+
+class PathDescription<C extends Command>
+  implements
+    PathDescriptionMember<ToAbsoluteCommand<C>>,
+    PathDescriptionBehavior
+{
+  constructor(
+    public readonly start: Coord,
+    public readonly command: ToAbsoluteCommand<C>,
+    public readonly args: PathDescriptionArgs<ToAbsoluteCommand<C>>,
+  ) {}
+
+  public get end(): Coord {
+    switch (this.command) {
+      case "L":
+      case "T":
+        return [this.args[0], this.args[1]] as Coord;
+      case "H":
+        return [this.args[0], this.start[1]] as Coord;
+      case "V":
+        return [this.start[0], this.args[0]] as Coord;
+      case "C":
+        return [this.args[4], this.args[5]] as Coord;
+      case "S":
+      case "Q":
+        return [this.args[2], this.args[3]] as Coord;
+      case "A":
+        return [this.args[5], this.args[6]] as Coord;
+      default:
+        throw new Error(`Invalid command: ${this.command}`);
+    }
+  }
+
+  public getSegment() {
+    return this.command + " " + this.args.join(" ");
+  }
+
+  public toString(): string {
+    return `M ${this.start[0]} ${this.start[1]} ${this.getSegment()} Z`;
+  }
+}
+
 export class DPath {
   constructor() {}
 
@@ -244,44 +317,4 @@ export class DPath {
       nativeDArgs as any,
     );
   };
-}
-
-// 根据 SVG 命令名称返回对应命令参数组成的元祖类型
-type PathDescriptionArgs<C extends Command> = C extends "l" | "L"
-  ? [number, number]
-  : C extends "h" | "H"
-    ? [number]
-    : C extends "v" | "V"
-      ? [number]
-      : C extends "c" | "C"
-        ? [number, number, number, number, number, number]
-        : C extends "s" | "S"
-          ? [number, number, number, number]
-          : C extends "q" | "Q"
-            ? [number, number, number, number]
-            : C extends "t" | "T"
-              ? [number, number]
-              : C extends "a" | "A"
-                ? [number, number, number, 0 | 1, 0 | 1, number, number]
-                : never;
-
-// 路径描述对象，包含单个命令及对应的参数
-interface PathDescriptionInfo<C extends Command> {
-  start: Coord;
-  command: C;
-  args: PathDescriptionArgs<C>;
-}
-
-interface PathDescriptionBehavior {
-  // addPath: AddPathOverloads;
-}
-
-class PathDescription<C extends Command>
-  implements PathDescriptionInfo<ToAbsoluteCommand<C>>, PathDescriptionBehavior
-{
-  constructor(
-    public readonly start: Coord,
-    public readonly command: ToAbsoluteCommand<C>,
-    public readonly args: PathDescriptionArgs<ToAbsoluteCommand<C>>,
-  ) {}
 }

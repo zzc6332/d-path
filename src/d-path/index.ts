@@ -46,10 +46,10 @@ type Coord = [number, number];
 
 // 用于 createPath 方法的重载签名组成的元祖类型，后续可以转为交叉类型来实现重载；其它方法有类似的重载签名也可以以这个元祖为基础映射类型以进行拓展
 type AddPathOverloadsTuple = [
-  <C extends "l" | "L">(command: C, endX: number, endY: number) => PathDescSeq,
-  <C extends "l" | "L">(command: C, end: Coord) => PathDescSeq,
-  <C extends "h" | "H">(command: C, endX: number) => PathDescSeq,
-  <C extends "v" | "V">(command: C, endY: number) => PathDescSeq,
+  <C extends "l" | "L">(command: C, endX: number, endY: number) => PathData,
+  <C extends "l" | "L">(command: C, end: Coord) => PathData,
+  <C extends "h" | "H">(command: C, endX: number) => PathData,
+  <C extends "v" | "V">(command: C, endY: number) => PathData,
   <C extends "c" | "C">(
     command: C,
     controlPointX1: number,
@@ -58,20 +58,20 @@ type AddPathOverloadsTuple = [
     controlPointY2: number,
     endX: number,
     endY: number,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "c" | "C">(
     command: C,
     controlPoint1: Coord,
     controlPoint2: Coord,
     end: Coord,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "s" | "S">(
     command: C,
     controlPointX: number,
     controlPointY: number,
     endX: number,
     endY: number,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "s" | "S">(command: C, controlPoint: Coord, end: Coord) => any,
   <C extends "q" | "Q">(
     command: C,
@@ -79,7 +79,7 @@ type AddPathOverloadsTuple = [
     controlPointY: number,
     endX: number,
     endY: number,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "q" | "Q">(command: C, controlPoint: Coord, end: Coord) => any,
   <C extends "t" | "T">(command: C, endX: number, endY: number) => any,
   <C extends "t" | "T">(command: C, end: Coord) => any,
@@ -92,7 +92,7 @@ type AddPathOverloadsTuple = [
     sweepFlag: boolean | 0 | 1,
     endX: number,
     endY: number,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "a" | "A">(
     command: C,
     rx: number,
@@ -101,7 +101,7 @@ type AddPathOverloadsTuple = [
     largeArcFlag: boolean | 0 | 1,
     sweepFlag: boolean | 0 | 1,
     end: Coord,
-  ) => PathDescSeq,
+  ) => PathData,
   <C extends "a" | "A">(
     command: C,
     radius: number | [number, number],
@@ -109,7 +109,7 @@ type AddPathOverloadsTuple = [
     rotation?: number,
     largeArcFlag?: boolean | 0 | 1,
     sweepFlag?: boolean | 0 | 1,
-  ) => PathDescSeq,
+  ) => PathData,
 ];
 
 // 用于将 AddPathOverloadsTuple 转换为 CreatePathOverloadsTuple 的工厂类型，实质上是向 AddPathOverloadsTuple 中的每个函数签名的参数列表前添加一个 start: Coord 参数
@@ -137,12 +137,12 @@ type MakePathSegmentInfoResult<
     ) => pathSegmentInfo<ToAbsoluteCommand<Parameters<T>[I]>>
   : never;
 
-// 把一个函数签名的返回值变成 PathDesc，第二个泛型 I 指定了要选用的 Command 类型在该函数参数中的序号
-type MakePathDescResult<
+// 把一个函数签名的返回值变成 PathSegment，第二个泛型 I 指定了要选用的 Command 类型在该函数参数中的序号
+type MakePathSegmentResult<
   T extends (...args: any[]) => any,
   I extends number,
 > = T extends (...args: any[]) => any
-  ? (...args: Parameters<T>) => PathDesc<ToAbsoluteCommand<Parameters<T>[I]>>
+  ? (...args: Parameters<T>) => PathSegment<ToAbsoluteCommand<Parameters<T>[I]>>
   : never;
 
 // 把 CreatePathOverloadsTuple 中的函数签名转换为 CreatePathSegmentInfoOverloadsTuple 的工具函数，
@@ -171,7 +171,7 @@ type CreatePathSegmentInfoOverloads =
   TupleToIntersection<CreatePathSegmentInfoOverloadsTuple>;
 
 // 根据 SVG 命令名称返回对应命令参数组成的元祖类型
-type PathDescArgs<C extends Command> = C extends "l" | "L"
+type PathSegmentArgs<C extends Command> = C extends "l" | "L"
   ? [number, number]
   : C extends "h" | "H"
     ? [number]
@@ -189,26 +189,11 @@ type PathDescArgs<C extends Command> = C extends "l" | "L"
                 ? [number, number, number, 0 | 1, 0 | 1, number, number]
                 : never;
 
-// 路径描述对象，包含单个命令及对应的参数
-interface PathDescMember<C extends AbsoluteCommand> {
-  start: Coord;
-  end: Coord;
-  command: C;
-  args: PathDescArgs<C>;
-}
-
-interface PathDescBehavior {
-  getSegment: () => string;
-  toString: () => string;
-}
-
-class PathDesc<C extends AbsoluteCommand = AbsoluteCommand>
-  implements PathDescMember<C>, PathDescBehavior
-{
+class PathSegment<C extends AbsoluteCommand = AbsoluteCommand> {
   constructor(
     public readonly start: Coord,
     public readonly command: C,
-    public readonly args: PathDescArgs<C>,
+    public readonly args: PathSegmentArgs<C>,
   ) {}
 
   public get end(): Coord {
@@ -239,15 +224,6 @@ class PathDesc<C extends AbsoluteCommand = AbsoluteCommand>
   public toString(): string {
     return `M ${this.start[0]} ${this.start[1]} ${this.getSegment()} Z`;
   }
-}
-
-interface PathDescSeqMember {
-  start: Coord;
-  end: Coord;
-}
-
-interface PathDescSeqBehavior {
-  addPath: AddPathOverloads;
 }
 
 class DPathCommon {
@@ -357,46 +333,61 @@ class DPathCommon {
 interface pathSegmentInfo<C extends AbsoluteCommand = AbsoluteCommand> {
   start: Coord;
   command: C;
-  nativeDArgs: PathDescArgs<C> extends never ? number[] : PathDescArgs<C>;
+  nativeDArgs: PathSegmentArgs<C> extends never ? number[] : PathSegmentArgs<C>;
 }
 
-export class DPath extends DPathCommon {
-  private pathSet: Set<PathDescSeq>
+export default class DPath extends DPathCommon {
+  private pathSet: Set<PathData>;
   constructor() {
     super();
-    this.pathSet = new Set()
+    this.pathSet = new Set();
   }
 
   public createPath: CreatePathOverloads = (...args) => {
     const { start, command, nativeDArgs } = this.createPathSegmentInfo(
       ...(args as Parameters<CreatePathOverloads>),
     );
-    const result = new PathDescSeq(start, command, nativeDArgs);
-    this.pathSet.add(result)
-    return result
+    const result = new PathData(start, command, nativeDArgs);
+    this.pathSet.add(result);
+    return result;
   };
 }
 
-class PathDescSeq extends DPathCommon  implements PathDescSeqMember, PathDescSeqBehavior {
-  private pathDescList: PathDesc[];
+class PathData extends DPathCommon {
+  private pathSegmentList: PathSegment[];
 
   constructor(start: Coord, command: AbsoluteCommand, args: any) {
     super();
-    this.pathDescList = [new PathDesc(start, command, args)];
+    this.pathSegmentList = [new PathSegment(start, command, args)];
   }
 
   public get start() {
-    return this.pathDescList[0].start;
+    return this.pathSegmentList[0].start;
   }
 
   public get end() {
-    return this.pathDescList[this.pathDescList.length - 1].end;
+    return this.pathSegmentList[this.pathSegmentList.length - 1].end;
   }
 
-  public addPath(this: PathDescSeq, ...args: any[]) {
-    const createPathSegmentInfoArgs = [...this.end, ...args] as unknown as Parameters<CreatePathSegmentInfoOverloads>
-    const {start, command, nativeDArgs} = this.createPathSegmentInfo(...createPathSegmentInfoArgs)
-    this.pathDescList.push(new PathDesc(start, command, nativeDArgs));
+  public addPath(this: PathData, ...args: any[]) {
+    const createPathSegmentInfoArgs = [
+      ...this.end,
+      ...args,
+    ] as unknown as Parameters<CreatePathSegmentInfoOverloads>;
+    const { start, command, nativeDArgs } = this.createPathSegmentInfo(
+      ...createPathSegmentInfoArgs,
+    );
+    this.pathSegmentList.push(new PathSegment(start, command, nativeDArgs));
     return this;
+  }
+
+  public toString() {
+    let result = `M ${this.start[0]} ${this.start[1]}`;
+    for (const pathSegment of this.pathSegmentList) {
+      result += " " + pathSegment.getSegment();
+    }
+    result += " Z";
+    console.log(6666, result);
+    return result;
   }
 }

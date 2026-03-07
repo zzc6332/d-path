@@ -179,8 +179,8 @@ export class PathSegment<
     return this.command + " " + this.args.join(" ");
   }
 
-  public toString(option: { close: Boolean } = { close: true }) {
-    return this.getCompleteString() + (option.close ? " Z" : "");
+  public toString() {
+    return this.getCompleteString();
   }
 }
 
@@ -198,6 +198,24 @@ export class PathData extends PathDataCommon {
 
   public get end() {
     return this.pathSegmentList[this.pathSegmentList.length - 1].end;
+  }
+
+  public isClosed: boolean = false;
+
+  /**
+   * 闭合路径
+   */
+  public close() {
+    this.isClosed = true;
+    return this;
+  }
+
+  /**
+   * 取消闭合路径
+   */
+  public open() {
+    this.isClosed = false;
+    return this;
   }
 
   public addPath: AddPathOverloads = function (this: PathData, ...args: any[]) {
@@ -220,8 +238,8 @@ export class PathData extends PathDataCommon {
     );
   }
 
-  public toString(option: { close: Boolean } = { close: true }) {
-    return this.getCompleteString() + (option.close ? " Z" : "");
+  public toString() {
+    return this.getCompleteString() + (this.isClosed ? " Z" : "");
   }
 }
 

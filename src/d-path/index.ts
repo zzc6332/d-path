@@ -7,7 +7,7 @@ import type {
   CreatePathOverloads,
   pathSegmentInfo,
   ToAbsoluteCommand,
-  AddPathOverloads,
+  AddCommandOverloads,
 } from "./types";
 
 // DPathCommon 中定义一些通用方法
@@ -128,6 +128,12 @@ abstract class PathDataCommon extends DPathCommon {
     super();
   }
   abstract start: Coord;
+
+  /**
+   * 翻转当前路径方向
+   */
+  abstract reverse(): this;
+
   /**
    * 生成路径字符串中的核心命令字符串
    */
@@ -147,15 +153,23 @@ export class PathSegment<
   C extends AbsoluteCommand = AbsoluteCommand,
 > extends PathDataCommon {
   constructor(
-    public readonly start: Coord,
-    public readonly command: C,
-    public readonly args: PathSegmentArgs<C>,
+    private _start: Coord,
+    private _command: C,
+    private _args: PathSegmentArgs<C>,
   ) {
     super();
   }
 
+  public get command(): C {
+    return this._command;
+  }
+
+  public get start(): Coord {
+    return this._start;
+  }
+
   public get end(): Coord {
-    switch (this.command) {
+    switch (this._command) {
       case "L":
       case "T":
         return [this.args[0], this.args[1]] as Coord;
@@ -171,8 +185,68 @@ export class PathSegment<
       case "A":
         return [this.args[5], this.args[6]] as Coord;
       default:
+        throw new Error(`Invalid command: ${this._command}`);
+    }
+  }
+
+  public get args(): PathSegmentArgs<C> {
+    return this._args;
+  }
+
+  public reverse() {
+    const newEnd = this.start;
+    this._start = this.end;
+    switch (this.command) {
+      case "L":
+      case "T":
+        (this._args as PathSegmentArgs<"L" | "T">) = newEnd;
+        break;
+      case "H":
+        (this._args as PathSegmentArgs<"H">) = [newEnd[0]];
+        break;
+      case "V":
+        (this._args as PathSegmentArgs<"V">) = [newEnd[1]];
+        break;
+      case "C":
+        {
+          const oldArgs = this.args as PathSegmentArgs<"C">;
+          (this._args as PathSegmentArgs<"C">) = [
+            oldArgs[2],
+            oldArgs[3],
+            oldArgs[0],
+            oldArgs[1],
+            ...newEnd,
+          ];
+        }
+        break;
+      case "S":
+      case "Q":
+        {
+          const oldArgs = this.args as PathSegmentArgs<"S" | "Q">;
+          (this._args as PathSegmentArgs<"S" | "Q">) = [
+            oldArgs[0],
+            oldArgs[1],
+            ...newEnd,
+          ];
+        }
+        break;
+      case "A":
+        {
+          const oldArgs = this.args as PathSegmentArgs<"A">;
+          (this._args as PathSegmentArgs<"A">) = [
+            oldArgs[0],
+            oldArgs[1],
+            oldArgs[2],
+            oldArgs[3],
+            oldArgs[4],
+            ...newEnd,
+          ];
+        }
+        break;
+      default:
         throw new Error(`Invalid command: ${this.command}`);
     }
+    return this;
   }
 
   public getMiddleString() {
@@ -184,12 +258,17 @@ export class PathSegment<
   }
 }
 
+// PathData 代表一条完整的连续路径
 export class PathData extends PathDataCommon {
-  private pathSegmentList: PathSegment[];
+  private _pathSegmentList: PathSegment[];
 
   constructor(start: Coord, command: AbsoluteCommand, args: any) {
     super();
-    this.pathSegmentList = [new PathSegment(start, command, args)];
+    this._pathSegmentList = [new PathSegment(start, command, args)];
+  }
+
+  public get pathSegmentList() {
+    return this._pathSegmentList;
   }
 
   public get start() {
@@ -200,6 +279,7 @@ export class PathData extends PathDataCommon {
     return this.pathSegmentList[this.pathSegmentList.length - 1].end;
   }
 
+  // 当前路径是否需要闭合（在末尾使用 Z 命令）
   public isClosed: boolean = false;
 
   /**
@@ -218,9 +298,12 @@ export class PathData extends PathDataCommon {
     return this;
   }
 
-  public addPath: AddPathOverloads = function (this: PathData, ...args: any[]) {
+  /**
+   * 在当前连续路径末尾追加新的命令
+   */
+  public add: AddCommandOverloads = function (this: PathData, ...args: any[]) {
     const createPathSegmentInfoArgs = [
-      ...this.end,
+      this.end,
       ...args,
     ] as unknown as Parameters<CreatePathSegmentInfoOverloads>;
     const { start, command, nativeDArgs } = this.createPathSegmentInfo(
@@ -229,6 +312,26 @@ export class PathData extends PathDataCommon {
     this.pathSegmentList.push(new PathSegment(start, command, nativeDArgs));
     return this;
   };
+
+  /**
+   * 反转当前路径的方向
+   */
+  public reverse() {
+    this.pathSegmentList
+      .reverse()
+      .forEach((pathSegment) => pathSegment.reverse());
+    return this;
+  }
+
+  public concat(pathData: PathData) {
+    if (this.end.toString() === pathData.start.toString()) {
+      this._pathSegmentList = [
+        ...this._pathSegmentList,
+        ...pathData._pathSegmentList,
+      ];
+    }
+    return this;
+  }
 
   public getMiddleString() {
     return this.pathSegmentList.reduce(
@@ -243,6 +346,7 @@ export class PathData extends PathDataCommon {
   }
 }
 
+// 暴露的主体对象
 export default class DPath extends DPathCommon {
   private pathSet: Set<PathData>;
   constructor() {
@@ -250,7 +354,10 @@ export default class DPath extends DPathCommon {
     this.pathSet = new Set();
   }
 
-  public createPath: CreatePathOverloads = (...args) => {
+  /**
+   * 创建一条路径
+   */
+  public create: CreatePathOverloads = (...args) => {
     const { start, command, nativeDArgs } = this.createPathSegmentInfo(
       ...(args as Parameters<CreatePathOverloads>),
     );
@@ -259,5 +366,47 @@ export default class DPath extends DPathCommon {
     return result;
   };
 
-  public connect() {}
+  private mergePathData(d1: PathData, d2: PathData) {
+    if (d1.end.toString() === d2.start.toString()) {
+      d1.concat(d2);
+      return true;
+    } else if (d1.end.toString() === d2.end.toString()) {
+      d1.concat(d2.reverse());
+      return true;
+    } else if (d1.start.toString() === d2.start.toString()) {
+      d1.reverse().concat(d2);
+      return true;
+    } else if (d1.start.toString() === d2.end.toString()) {
+      d1.reverse().concat(d2.reverse());
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  private recurMerge(d1: PathData) {
+    let hasMerged = false;
+    this.pathSet.forEach((d2) => {
+      if (this.mergePathData(d1, d2)) {
+        this.pathSet.delete(d2);
+        hasMerged = true;
+      }
+    });
+    if (hasMerged) {
+      this.recurMerge(d1);
+    }
+  }
+
+  /**
+   * 将创建过的所有路径中，存在相连的路径进行合并
+   */
+  public connect() {
+    const pathSetTmp = new Set<PathData>();
+    this.pathSet.forEach((pathData) => {
+      pathSetTmp.add(pathData);
+      this.pathSet.delete(pathData);
+      this.recurMerge(pathData);
+    });
+    this.pathSet = pathSetTmp;
+  }
 }

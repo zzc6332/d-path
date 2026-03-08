@@ -24,8 +24,8 @@ export type ToAbsoluteCommand<Command> = Command extends "l" | "L"
                 ? "A"
                 : never;
 
-// 用于 createPath 方法的重载签名组成的元祖类型，后续可以转为交叉类型来实现重载；其它方法有类似的重载签名也可以以这个元祖为基础映射类型以进行拓展
-type AddPathOverloadsTuple = [
+// 用于 addCommand 方法的重载签名组成的元祖类型，后续可以转为交叉类型来实现重载；其它方法有类似的重载签名也可以以这个元祖为基础映射类型以进行拓展
+type AddCommandOverloadsTuple = [
   <C extends "l" | "L">(command: C, endX: number, endY: number) => PathData,
   <C extends "l" | "L">(command: C, end: Coord) => PathData,
   <C extends "h" | "H">(command: C, endX: number) => PathData,
@@ -92,7 +92,7 @@ type AddPathOverloadsTuple = [
   ) => PathData,
 ];
 
-// 用于将 AddPathOverloadsTuple 转换为 CreatePathOverloadsTuple 的工厂类型，实质上是向 AddPathOverloadsTuple 中的每个函数签名的参数列表前添加一个 start: Coord 参数
+// 用于将 AddCommandOverloadsTuple 转换为 CreatePathOverloadsTuple 的工厂类型，实质上是向 AddCommandOverloadsTuple 中的每个函数签名的参数列表前添加一个 start: Coord 参数
 type CreatePathOverloadsTupleFactory<T extends ((...args: any[]) => any)[]> =
   T extends [
     infer First extends (...args: any) => any,
@@ -103,9 +103,9 @@ type CreatePathOverloadsTupleFactory<T extends ((...args: any[]) => any)[]> =
         ...CreatePathOverloadsTupleFactory<Rest>,
       ]
     : [];
-// 用于 addPath 方法的重载签名组成的元祖类型
+// 用于 addCommand 方法的重载签名组成的元祖类型
 type CreatePathOverloadsTuple =
-  CreatePathOverloadsTupleFactory<AddPathOverloadsTuple>;
+  CreatePathOverloadsTupleFactory<AddCommandOverloadsTuple>;
 
 // 把一个函数签名的返回值变成 pathSegmentInfo, I 指定了要选用的 Command 类型在该函数参数中的序号
 type MakePathSegmentInfoResult<
@@ -136,8 +136,8 @@ type CreatePathSegmentInfoOverloadsTuple =
 
 // 用于 createPath 方法的重载签名
 export type CreatePathOverloads = TupleToIntersection<CreatePathOverloadsTuple>;
-// 用于 addPath 方法的重载签名
-export type AddPathOverloads = TupleToIntersection<AddPathOverloadsTuple>;
+// 用于 addCommand 方法的重载签名
+export type AddCommandOverloads = TupleToIntersection<AddCommandOverloadsTuple>;
 // 用于 CreatePathSegmentInfoOverloads 方法的重载签名
 export type CreatePathSegmentInfoOverloads =
   TupleToIntersection<CreatePathSegmentInfoOverloadsTuple>;

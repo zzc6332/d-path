@@ -1,0 +1,104 @@
+import type {
+  Command,
+  Coord,
+  CreatePathSegmentInfoOverloads,
+  pathSegmentInfo,
+  ToAbsoluteCommand,
+} from "./types";
+
+/**
+ * 将一些创建路径的方法的传参输出为统一的格式，如果传入的是使用相对坐标的命令，则结果会被转换为绝对坐标的形式
+ * @param start 起始点坐标
+ * @param command 路径命令
+ * @param args 其余的参数，支持多种传参格式，最终会被整理为与原生 SVG 路径命令参数相同的格式
+ * @returns
+ */
+export const createPathSegmentInfo: CreatePathSegmentInfoOverloads = <
+  C extends Command,
+>(
+  start: Coord,
+  command: C,
+  ...args: any[]
+): pathSegmentInfo<ToAbsoluteCommand<C>> => {
+  let nativeDArgs: number[] = [];
+  const isNativeArgs = args.every(
+    (arg) => typeof arg === "number" || typeof arg === "boolean",
+  );
+  // 当传入的剩余参数完全对应 SVG 原生命令参数时，直接使用这些参数，否则进行转换
+  if (isNativeArgs) {
+    for (let i = 0; i < args.length; i++) {
+      const nativeArg =
+        typeof args[i] === "boolean" ? (args[i] ? 1 : 0) : (args[i] as number);
+      nativeDArgs[i] = nativeArg;
+    }
+  }
+  switch (command) {
+    case "l":
+    case "L":
+      if (!isNativeArgs) {
+        nativeDArgs.push(...args[0]);
+      }
+      if (command.toUpperCase() !== command) {
+        nativeDArgs[0] += start[0];
+        nativeDArgs[1] += start[1];
+      }
+      break;
+    case "h":
+    case "H":
+      if (command.toUpperCase() !== command) {
+        nativeDArgs[0] += start[0];
+      }
+      break;
+    case "v":
+    case "V":
+      if (command.toUpperCase() !== command) {
+        nativeDArgs[0] += start[1];
+      }
+      break;
+    case "c":
+    case "C":
+    case "s":
+    case "S":
+    case "q":
+    case "Q":
+    case "t":
+    case "T":
+      if (!isNativeArgs) {
+        nativeDArgs = [].concat(...args);
+      }
+      if (command.toUpperCase() !== command) {
+        for (let i = 0; i < nativeDArgs.length; i++) {
+          nativeDArgs[i] = args[i % 2];
+        }
+      }
+      break;
+    case "a":
+    case "A":
+      if (!isNativeArgs) {
+        if (Array.isArray(args[5])) {
+          nativeDArgs = [].concat(...args);
+        } else {
+          const radius = args[0];
+          const rx = Array.isArray(radius) ? radius[0] : radius;
+          const ry = Array.isArray(radius) ? radius[1] : radius;
+          const rotation = args[2] || 0;
+          const largeArcFlag = !!(args[3] ?? true) ? 1 : 0;
+          const sweepFlag = !!(args[4] ?? true) ? 1 : 0;
+          const [endX, endY] = args[1];
+          nativeDArgs = [rx, ry, rotation, largeArcFlag, sweepFlag, endX, endY];
+        }
+        if (command.toUpperCase() !== command) {
+          nativeDArgs[5] += start[0];
+          nativeDArgs[6] += start[1];
+        }
+      }
+      break;
+    default:
+      throw new Error(`Invalid command: ${command}`);
+  }
+  return {
+    start,
+    command: command.toUpperCase(),
+    nativeDArgs,
+  } as pathSegmentInfo<ToAbsoluteCommand<C>>;
+};

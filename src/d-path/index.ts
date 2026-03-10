@@ -354,6 +354,10 @@ export default class DPath extends DPathCommon {
     this.pathSet = new Set();
   }
 
+  public get pathList() {
+    return Array.from(this.pathSet);
+  }
+
   /**
    * 创建一条路径
    */
@@ -408,5 +412,13 @@ export default class DPath extends DPathCommon {
       this.recurMerge(pathData);
     });
     this.pathSet = pathSetTmp;
+  }
+
+  public toString() {
+    let result = ''
+    this.pathSet.forEach(pathData=>{
+      result += (result ? ' ' : '') + pathData.toString()
+    })
+    return result;
   }
 }

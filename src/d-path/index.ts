@@ -316,8 +316,10 @@ export class PathGroup extends PathGroupCommom {
     super();
     this.pathSet = new Set();
     pathList.forEach((item) => {
-      this.pathSet.add(item);
-      topPathSet.delete(item);
+      if (topPathSet.has(item)) {
+        this.pathSet.add(item);
+        topPathSet.delete(item);
+      }
     });
   }
 }

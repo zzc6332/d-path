@@ -74,6 +74,14 @@ abstract class PathGroupCommom {
     });
     this.pathSet = pathSetTmp;
   }
+
+  public toString() {
+    let result = "";
+    this.pathSet.forEach((item) => {
+      result += (result ? " " : "") + item.toString();
+    });
+    return result;
+  }
 }
 
 // PathDataCommon 中定义用于路径相关对象中的一些通用方法
@@ -301,29 +309,24 @@ export class PathData extends PathDataCommon {
 export class PathGroup extends PathGroupCommom {
   protected pathSet: Set<PathData | PathGroup>;
 
-  constructor(...args: (PathData | PathGroup)[] | [(PathData | PathGroup)[]]) {
+  constructor(
+    pathList: (PathData | PathGroup)[],
+    topPathSet: Set<PathData | PathGroup>,
+  ) {
     super();
     this.pathSet = new Set();
-    const addToSet = (
-      data: ((PathData | PathGroup)[] | (PathData | PathGroup))[],
-    ) => {
-      data.forEach((item) => {
-        if (Array.isArray(item)) {
-          addToSet(item);
-        } else {
-          this.pathSet.add(item);
-        }
-      });
-    };
-    addToSet(args);
+    pathList.forEach((item) => {
+      this.pathSet.add(item);
+      topPathSet.delete(item);
+    });
   }
 }
 
 // 暴露的主体对象
 export default class DPath extends PathGroupCommom {
-  protected pathSet: Set<PathData>;
+  protected pathSet: Set<PathData | PathGroup>;
   constructor() {
-    super()
+    super();
     this.pathSet = new Set();
   }
 
@@ -338,16 +341,23 @@ export default class DPath extends PathGroupCommom {
     const { start, command, nativeDArgs } = createPathSegmentInfo(
       ...(args as Parameters<CreatePathOverloads>),
     );
-    const result = new PathData(start, command, nativeDArgs);
-    this.pathSet.add(result);
-    return result;
+    const pathData = new PathData(start, command, nativeDArgs);
+    this.pathSet.add(pathData);
+    return pathData;
   };
 
-  public toString() {
-    let result = "";
-    this.pathSet.forEach((pathData) => {
-      result += (result ? " " : "") + pathData.toString();
-    });
-    return result;
+  /**
+   * 将已创建的路径并为一组
+   */
+  public group(...args: (PathData | PathGroup)[] | [(PathData | PathGroup)[]]) {
+    let input: (PathData | PathGroup)[];
+    if (args.length === 1 && Array.isArray(args[0])) {
+      input = args[0];
+    } else {
+      input = args as (PathData | PathGroup)[];
+    }
+    const pathGroup = new PathGroup(input, this.pathSet);
+    this.pathSet.add(pathGroup);
+    return pathGroup;
   }
 }

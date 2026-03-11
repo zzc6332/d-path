@@ -5,8 +5,10 @@ import type {
   CreatePathSegmentInfoOverloads,
   CreatePathOverloads,
   AddCommandOverloads,
+  Operations,
+  Vector,
 } from "./types";
-import { createPathSegmentInfo } from "./utils";
+import { createPathSegmentInfo, offsetCoord } from "./utils";
 
 // PathGroupCommom 中定义一些 PathGroup 的成员和行为，且在 DPath 类中也能复用
 abstract class PathGroupCommom {
@@ -109,9 +111,10 @@ abstract class PathDataCommon {
 }
 
 // PathSegment 对应组成路径的最小单位，除了 M 与 Z 之外只包含单个路径命令
-export class PathSegment<
-  C extends AbsoluteCommand = AbsoluteCommand,
-> extends PathDataCommon {
+export class PathSegment<C extends AbsoluteCommand = AbsoluteCommand>
+  extends PathDataCommon
+  implements Operations<PathSegment<C>>
+{
   constructor(
     private _start: Coord,
     private _command: C,
@@ -156,7 +159,7 @@ export class PathSegment<
   public reverse() {
     const newEnd = this.start;
     this._start = this.end;
-    switch (this.command) {
+    switch (this._command) {
       case "L":
       case "T":
         (this._args as PathSegmentArgs<"L" | "T">) = newEnd;
@@ -169,7 +172,7 @@ export class PathSegment<
         break;
       case "C":
         {
-          const oldArgs = this.args as PathSegmentArgs<"C">;
+          const oldArgs = this._args as PathSegmentArgs<"C">;
           (this._args as PathSegmentArgs<"C">) = [
             oldArgs[2],
             oldArgs[3],
@@ -182,7 +185,7 @@ export class PathSegment<
       case "S":
       case "Q":
         {
-          const oldArgs = this.args as PathSegmentArgs<"S" | "Q">;
+          const oldArgs = this._args as PathSegmentArgs<"S" | "Q">;
           (this._args as PathSegmentArgs<"S" | "Q">) = [
             oldArgs[0],
             oldArgs[1],
@@ -192,19 +195,19 @@ export class PathSegment<
         break;
       case "A":
         {
-          const oldArgs = this.args as PathSegmentArgs<"A">;
+          const oldArgs = this._args as PathSegmentArgs<"A">;
           (this._args as PathSegmentArgs<"A">) = [
             oldArgs[0],
             oldArgs[1],
             oldArgs[2],
             oldArgs[3],
-            oldArgs[4],
+            oldArgs[4] === 1 ? 0 : 1,
             ...newEnd,
           ];
         }
         break;
       default:
-        throw new Error(`Invalid command: ${this.command}`);
+        throw new Error(`Invalid command: ${this._command}`);
     }
     return this;
   }
@@ -216,10 +219,74 @@ export class PathSegment<
   public toString() {
     return this.getCompleteString();
   }
+
+  public move: Operations<PathSegment<C>>["move"] = (...args: any[]) => {
+    let vector: Vector;
+    if (Array.isArray(args[0])) {
+      vector = args[0] as Vector;
+    } else {
+      vector = [args[0], args[1]];
+    }
+    this._start = offsetCoord(this._start, vector);
+    const newEnd = offsetCoord(this.end, vector);
+    switch (this._command) {
+      case "L":
+      case "T":
+        {
+          (this._args as PathSegmentArgs<"L" | "T">) = newEnd;
+        }
+        break;
+      case "H":
+        (this._args as PathSegmentArgs<"H">) = [newEnd[0]];
+        break;
+      case "V":
+        (this._args as PathSegmentArgs<"V">) = [newEnd[1]];
+        break;
+      case "C":
+        {
+          const oldArgs = this._args as PathSegmentArgs<"C">;
+          (this._args as PathSegmentArgs<"C">) = [
+            oldArgs[0] + vector[0],
+            oldArgs[1] + vector[1],
+            oldArgs[2] + vector[0],
+            oldArgs[3] + vector[1],
+            ...newEnd,
+          ];
+        }
+        break;
+      case "S":
+      case "Q":
+        {
+          const oldArgs = this._args as PathSegmentArgs<"S" | "Q">;
+          (this._args as PathSegmentArgs<"S" | "Q">) = [
+            oldArgs[0] + vector[0],
+            oldArgs[1] + vector[1],
+            ...newEnd,
+          ];
+        }
+        break;
+      case "A":
+        {
+          const oldArgs = this._args as PathSegmentArgs<"A">;
+          (this._args as PathSegmentArgs<"A">) = [
+            oldArgs[0],
+            oldArgs[1],
+            oldArgs[2],
+            oldArgs[3],
+            oldArgs[4],
+            ...newEnd,
+          ];
+        }
+        break;
+      default:
+        throw new Error(`Invalid command: ${this._command}`);
+    }
+    return this;
+  };
 }
 
 // PathData 代表一条完整的连续路径
-export class PathData extends PathDataCommon {
+export class PathData extends PathDataCommon implements Operations<PathData> {
   private _pathSegmentList: PathSegment[];
 
   constructor(start: Coord, command: AbsoluteCommand, args: any) {
@@ -304,9 +371,19 @@ export class PathData extends PathDataCommon {
   public toString() {
     return this.getCompleteString() + (this.isClosed ? " Z" : "");
   }
+
+  public move: Operations<PathData>["move"] = (...args: any[]) => {
+    this.pathSegmentList.forEach((pathSegment) => {
+      (pathSegment.move as any)(...args);
+    });
+    return this;
+  };
 }
 
-export class PathGroup extends PathGroupCommom {
+export class PathGroup
+  extends PathGroupCommom
+  implements Operations<PathGroup>
+{
   protected pathSet: Set<PathData | PathGroup>;
 
   constructor(
@@ -322,6 +399,13 @@ export class PathGroup extends PathGroupCommom {
       }
     });
   }
+
+  public move: Operations<PathGroup>["move"] = (...args: any[]) => {
+    this.pathSet.forEach((item) => {
+      (item.move as any)(...args);
+    });
+    return this;
+  };
 }
 
 // 暴露的主体对象

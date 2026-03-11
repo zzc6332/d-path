@@ -2,6 +2,7 @@ import { PathData } from "./index";
 import type { TupleToIntersection, PrependParams } from "./utility-types";
 
 export type Coord = [number, number];
+export type Vector = [number, number];
 
 export type RelativeCommand = "l" | "h" | "v" | "c" | "s" | "q" | "t" | "a";
 export type AbsoluteCommand = "L" | "H" | "V" | "C" | "S" | "Q" | "T" | "A";
@@ -165,4 +166,9 @@ export interface pathSegmentInfo<C extends AbsoluteCommand = AbsoluteCommand> {
   start: Coord;
   command: C;
   nativeDArgs: PathSegmentArgs<C> extends never ? number[] : PathSegmentArgs<C>;
+}
+
+export interface Operations<R> {
+  move(vector: Vector): R;
+  move(x: number, y: number): R;
 }

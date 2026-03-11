@@ -4,6 +4,7 @@ import type {
   CreatePathSegmentInfoOverloads,
   pathSegmentInfo,
   ToAbsoluteCommand,
+  Vector,
 } from "./types";
 
 /**
@@ -102,3 +103,7 @@ export const createPathSegmentInfo: CreatePathSegmentInfoOverloads = <
     nativeDArgs,
   } as pathSegmentInfo<ToAbsoluteCommand<C>>;
 };
+
+export function offsetCoord(coord: Coord, vector: Vector): Coord {
+  return [coord[0] + vector[0], coord[1] + vector[1]];
+}

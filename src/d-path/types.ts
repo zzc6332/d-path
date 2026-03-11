@@ -26,12 +26,12 @@ export type ToAbsoluteCommand<Command> = Command extends "l" | "L"
 
 // 用于 addCommand 方法的重载签名组成的元祖类型，后续可以转为交叉类型来实现重载；其它方法有类似的重载签名也可以以这个元祖为基础映射类型以进行拓展
 type AddCommandOverloadsTuple = [
-  <C extends "l" | "L">(command: C, endX: number, endY: number) => PathData,
-  <C extends "l" | "L">(command: C, end: Coord) => PathData,
-  <C extends "h" | "H">(command: C, endX: number) => PathData,
-  <C extends "v" | "V">(command: C, endY: number) => PathData,
-  <C extends "c" | "C">(
-    command: C,
+  (command: "l" | "L", endX: number, endY: number) => PathData,
+  (command: "l" | "L", end: Coord) => PathData,
+  (command: "h" | "H", endX: number) => PathData,
+  (command: "v" | "V", endY: number) => PathData,
+  (
+    command: "c" | "C",
     controlPointX1: number,
     controlPointY1: number,
     controlPointX2: number,
@@ -39,32 +39,32 @@ type AddCommandOverloadsTuple = [
     endX: number,
     endY: number,
   ) => PathData,
-  <C extends "c" | "C">(
-    command: C,
+  (
+    command: "c" | "C",
     controlPoint1: Coord,
     controlPoint2: Coord,
     end: Coord,
   ) => PathData,
-  <C extends "s" | "S">(
-    command: C,
+  (
+    command: "s" | "S",
     controlPointX: number,
     controlPointY: number,
     endX: number,
     endY: number,
   ) => PathData,
-  <C extends "s" | "S">(command: C, controlPoint: Coord, end: Coord) => any,
-  <C extends "q" | "Q">(
-    command: C,
+  (command: "s" | "S", controlPoint: Coord, end: Coord) => PathData,
+  (
+    command: "q" | "Q",
     controlPointX: number,
     controlPointY: number,
     endX: number,
     endY: number,
   ) => PathData,
-  <C extends "q" | "Q">(command: C, controlPoint: Coord, end: Coord) => any,
-  <C extends "t" | "T">(command: C, endX: number, endY: number) => any,
-  <C extends "t" | "T">(command: C, end: Coord) => any,
-  <C extends "a" | "A">(
-    command: C,
+  (command: "q" | "Q", controlPoint: Coord, end: Coord) => PathData,
+  (command: "t" | "T", endX: number, endY: number) => PathData,
+  (command: "t" | "T", end: Coord) => PathData,
+  (
+    command: "a" | "A",
     rx: number,
     ry: number,
     rotation: number,
@@ -73,8 +73,8 @@ type AddCommandOverloadsTuple = [
     endX: number,
     endY: number,
   ) => PathData,
-  <C extends "a" | "A">(
-    command: C,
+  (
+    command: "a" | "A",
     rx: number,
     ry: number,
     rotation: number,
@@ -82,8 +82,8 @@ type AddCommandOverloadsTuple = [
     sweepFlag: boolean | 0 | 1,
     end: Coord,
   ) => PathData,
-  <C extends "a" | "A">(
-    command: C,
+  (
+    command: "a" | "A",
     radius: number | [number, number],
     end: Coord,
     rotation?: number,

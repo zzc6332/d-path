@@ -8,7 +8,11 @@ import type {
   Operations,
   Vector,
 } from "./types";
-import { createPathSegmentInfo, offsetCoord } from "./utils";
+import {
+  checkPathSegmentType,
+  createPathSegmentInfo,
+  offsetCoord,
+} from "./utils";
 
 // PathGroupCommom 中定义一些 PathGroup 的成员和行为，且在 DPath 类中也能复用
 abstract class PathGroupCommom {
@@ -344,9 +348,66 @@ export class PathData extends PathDataCommon implements Operations<PathData> {
    * 反转当前路径的方向
    */
   public reverse() {
-    this.pathSegmentList
-      .reverse()
-      .forEach((pathSegment) => pathSegment.reverse());
+    // 反转路径方向时，S 命令和 T 命令，即平滑曲线命令需要特殊处理，在 pathSegmentList 中找出它们所在的序号
+    const smoothCurveIndexList = this.pathSegmentList
+      .filter(
+        (pathSegment) =>
+          pathSegment.command === "S" || pathSegment.command === "T",
+      )
+      .map((pathSegment) => this.pathSegmentList.indexOf(pathSegment));
+    // 要特殊处理的 PathSegment 的序号和处理后的 PathSegment 的映射
+    const pathSegmentMap = new Map<number, PathSegment>();
+    // 对平滑曲线命令做特殊反转处理
+    smoothCurveIndexList.forEach((smoothCurveIndex) => {
+      const smoothCurveSegment = this.pathSegmentList[
+        smoothCurveIndex
+      ] as PathSegment<"S" | "T">;
+      if (smoothCurveIndex > 0) {
+        const relatedSegment = this.pathSegmentList[smoothCurveIndex - 1];
+        if (checkPathSegmentType(smoothCurveSegment, "S")) {
+        } else if (checkPathSegmentType(smoothCurveSegment, "T")) {
+          if (checkPathSegmentType(relatedSegment, "Q")) {
+            // 二次贝塞尔曲线后接平滑二次贝塞尔曲线的情况
+            const start: Coord = relatedSegment.start;
+            const controlPoint: Coord = [
+              relatedSegment.args[0],
+              relatedSegment.args[1],
+            ];
+            const joinPoint: Coord = [
+              relatedSegment.args[2],
+              relatedSegment.args[3],
+            ];
+            const autoControlPoint: Coord = [
+              2 * joinPoint[0] - controlPoint[0],
+              2 * joinPoint[1] - controlPoint[1],
+            ];
+            const end: Coord = [
+              smoothCurveSegment.args[0],
+              smoothCurveSegment.args[1],
+            ];
+            const newStart = end;
+            const newControlPoint = autoControlPoint;
+            const newEnd = start;
+            const newQPathSegment = new PathSegment(newStart, "Q", [
+              ...newControlPoint,
+              ...joinPoint,
+            ]);
+            const newTPathSegment = new PathSegment(joinPoint, "T", newEnd);
+            pathSegmentMap.set(smoothCurveIndex, newQPathSegment);
+            pathSegmentMap.set(smoothCurveIndex - 1, newTPathSegment);
+          }
+        }
+      }
+    });
+    // 替换 pathSegmentList 中特殊处理的 PathSegment 后进行反转
+    this.pathSegmentList.forEach((pathSegment, index) => {
+      if (pathSegmentMap.has(index)) {
+        this.pathSegmentList[index] = pathSegmentMap.get(index)!;
+      } else {
+        pathSegment.reverse();
+      }
+    });
+    this.pathSegmentList.reverse();
     return this;
   }
 

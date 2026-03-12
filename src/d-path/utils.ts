@@ -1,4 +1,6 @@
+import type { PathSegment } from ".";
 import type {
+    AbsoluteCommand,
   Command,
   Coord,
   CreatePathSegmentInfoOverloads,
@@ -104,6 +106,25 @@ export const createPathSegmentInfo: CreatePathSegmentInfoOverloads = <
   } as pathSegmentInfo<ToAbsoluteCommand<C>>;
 };
 
+/**
+ * 计算出一个坐标叠加一个向量后的坐标
+ * @param coord 
+ * @param vector 
+ * @returns 
+ */
 export function offsetCoord(coord: Coord, vector: Vector): Coord {
   return [coord[0] + vector[0], coord[1] + vector[1]];
+}
+
+/**
+ * 判断一个 pathSegment 是对应某个指令，如果是则收缩具体的 pathSegment 类型
+ * @param pathSegment 
+ * @param command 
+ * @returns 
+ */
+export function checkPathSegmentType<C extends AbsoluteCommand>(
+  pathSegment: PathSegment,
+  command: C 
+): pathSegment is PathSegment<C> {
+  return pathSegment.command === command
 }

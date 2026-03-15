@@ -1,6 +1,6 @@
 import type { PathSegment } from ".";
 import type {
-    AbsoluteCommand,
+  AbsoluteCommand,
   Command,
   Coord,
   CreatePathSegmentInfoOverloads,
@@ -108,23 +108,46 @@ export const createPathSegmentInfo: CreatePathSegmentInfoOverloads = <
 
 /**
  * 计算出一个坐标叠加一个向量后的坐标
- * @param coord 
- * @param vector 
- * @returns 
+ * @param coord
+ * @param vector
+ * @returns
  */
 export function offsetCoord(coord: Coord, vector: Vector): Coord {
   return [coord[0] + vector[0], coord[1] + vector[1]];
 }
 
 /**
+ * 计算出两个坐标之间的向量
+ * @param startPoint
+ * @param endPoint
+ * @returns
+ */
+export function getOffsetVector(startPoint: Coord, endPoint: Coord): Vector {
+  return [endPoint[0] - startPoint[0], endPoint[1] - startPoint[1]];
+}
+
+/**
  * 判断一个 pathSegment 是对应某个指令，如果是则收缩具体的 pathSegment 类型
- * @param pathSegment 
- * @param command 
- * @returns 
+ * @param pathSegment
+ * @param command
+ * @returns
  */
 export function checkPathSegmentType<C extends AbsoluteCommand>(
   pathSegment: PathSegment,
-  command: C 
+  command: C,
 ): pathSegment is PathSegment<C> {
-  return pathSegment.command === command
+  return pathSegment.command === command;
+}
+
+/**
+ * 获取一个点相对于一个中心点的中心对称坐标
+ * @param originPoint
+ * @param centerPoint
+ * @returns
+ */
+export function getPointReflection(originPoint: Coord, centerPoint: Coord) {
+    console.log('originPoint',originPoint,'centerPoint',centerPoint)
+  const vector = getOffsetVector(originPoint, centerPoint);
+  console.log('vector',vector)
+  return offsetCoord(centerPoint, vector);
 }

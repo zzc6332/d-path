@@ -11,6 +11,7 @@ import type {
 import {
   checkPathSegmentType,
   createPathSegmentInfo,
+  getPointReflection,
   offsetCoord,
 } from "./utils";
 
@@ -163,9 +164,9 @@ export class PathSegment<C extends AbsoluteCommand = AbsoluteCommand>
   public reverse() {
     const newEnd = this.start;
     this._start = this.end;
+    // 命令 T 和 S 需做特殊处理所以不包含在内
     switch (this._command) {
       case "L":
-      case "T":
         (this._args as PathSegmentArgs<"L" | "T">) = newEnd;
         break;
       case "H":
@@ -186,7 +187,6 @@ export class PathSegment<C extends AbsoluteCommand = AbsoluteCommand>
           ];
         }
         break;
-      case "S":
       case "Q":
         {
           const oldArgs = this._args as PathSegmentArgs<"S" | "Q">;
@@ -348,53 +348,85 @@ export class PathData extends PathDataCommon implements Operations<PathData> {
    * 反转当前路径的方向
    */
   public reverse() {
-    // 反转路径方向时，S 命令和 T 命令，即平滑曲线命令需要特殊处理，在 pathSegmentList 中找出它们所在的序号
-    const smoothCurveIndexList = this.pathSegmentList
-      .filter(
-        (pathSegment) =>
-          pathSegment.command === "S" || pathSegment.command === "T",
-      )
-      .map((pathSegment) => this.pathSegmentList.indexOf(pathSegment));
-    // 要特殊处理的 PathSegment 的序号和处理后的 PathSegment 的映射
+    // 反转路径方向时，S 命令和 T 命令，即平滑曲线命令需要特殊处理，在 pathSegmentList 中找出它们所在的序号，存入 segmentSTail 和 segmentTTail 中
+    const segmentSTail = new Set<number>();
+    const segmentTTail = new Set<number>();
+    this.pathSegmentList.forEach((pathSegment, index) => {
+      /* 在 pathSegmentList 中找出 S 命令和 T 命令，存在以下情况时，将它们的序号和值设置为 segmentSMap 或 segmentTMap 的键值对：
+       *  1. S 命令且以下一命令不为 S
+       *  2. T 命令且以下一命令不为 T
+       * 这是因为反转后，之前末尾的 S 或 T 命令会反过来影响前面的曲线命令，所以这里只需要先存储最末尾的来作为处理的发起点
+       */
+      checkPathSegmentType(pathSegment, "S") &&
+        (!this.pathSegmentList[index + 1] ||
+          !checkPathSegmentType(this.pathSegmentList[index + 1], "S")) &&
+        segmentSTail.add(index);
+      checkPathSegmentType(pathSegment, "T") &&
+        (!this.pathSegmentList[index + 1] ||
+          !checkPathSegmentType(this.pathSegmentList[index + 1], "T")) &&
+        segmentTTail.add(index);
+    });
+    // pathSegmentMap 时要特殊处理的 PathSegment 的序号和处理后的 PathSegment 的映射
     const pathSegmentMap = new Map<number, PathSegment>();
-    // 对平滑曲线命令做特殊反转处理
-    smoothCurveIndexList.forEach((smoothCurveIndex) => {
-      const smoothCurveSegment = this.pathSegmentList[
-        smoothCurveIndex
-      ] as PathSegment<"S" | "T">;
-      if (smoothCurveIndex > 0) {
-        const relatedSegment = this.pathSegmentList[smoothCurveIndex - 1];
-        if (checkPathSegmentType(smoothCurveSegment, "S")) {
-        } else if (checkPathSegmentType(smoothCurveSegment, "T")) {
-          if (checkPathSegmentType(relatedSegment, "Q")) {
-            // 二次贝塞尔曲线后接平滑二次贝塞尔曲线的情况
-            const start: Coord = relatedSegment.start;
-            const controlPoint: Coord = [
-              relatedSegment.args[0],
-              relatedSegment.args[1],
-            ];
-            const joinPoint: Coord = [
-              relatedSegment.args[2],
-              relatedSegment.args[3],
-            ];
-            const autoControlPoint: Coord = [
-              2 * joinPoint[0] - controlPoint[0],
-              2 * joinPoint[1] - controlPoint[1],
-            ];
-            const end: Coord = [
-              smoothCurveSegment.args[0],
-              smoothCurveSegment.args[1],
-            ];
-            const newStart = end;
-            const newControlPoint = autoControlPoint;
-            const newEnd = start;
-            const newQPathSegment = new PathSegment(newStart, "Q", [
-              ...newControlPoint,
-              ...joinPoint,
+    segmentTTail.forEach((segmentTIndex) => {
+      // 先在 pathSegmentList 中从 segmentT 开始往前找，直到遇到 T、Q 以外的命令，把找到的 segment 加入到 seq 中
+      const seq: (PathSegment<"T"> | PathSegment<"Q">)[] = [];
+      for (let i = segmentTIndex; i >= 0; i--) {
+        const curSegment = this.pathSegmentList[i];
+        if (
+          checkPathSegmentType(curSegment, "T") ||
+          checkPathSegmentType(curSegment, "Q")
+        ) {
+          seq.push(curSegment);
+        } else {
+          break;
+        }
+      }
+      if (seq.length <= 1) {
+        // 如果这个 T 命令是单独存在的，那么它反转后等同于 L 命令
+        const singleTSegment = seq[0] as PathSegment<"T">;
+        const newSegment = new PathSegment(
+          singleTSegment.end,
+          "L",
+          singleTSegment.start,
+        );
+        pathSegmentMap.set(segmentTIndex, newSegment);
+      } else {
+        // startSegment 是这一系列平滑曲线的开头
+        const startSegment = seq[seq.length - 1];
+        // controlPointTmp 用来缓存每一段二次贝塞尔曲线的控制点，它将影响下一段二次贝塞尔曲线的控制点的位置
+        let controlPointTmp: Coord = checkPathSegmentType(startSegment, "Q")
+          ? [startSegment.args[0], startSegment.args[1]]
+          : startSegment.start;
+        // 从 seq 的尾部（但也是是曲线的头部）开始处理
+        for (let i = seq.length - 1; i >= 0; i--) {
+          const curSegment = seq[i];
+          // 计算出 curSegment 在 pathSegmentList 中的序号
+          const indexInPathSegmentList = segmentTIndex - i;
+          // 当前曲线不是第一段的情况，控制点根据上一个控制点推算出来
+          if (i !== seq.length - 1) {
+            // 用中心对称推算
+            controlPointTmp = getPointReflection(
+              controlPointTmp,
+              curSegment.start,
+            );
+          }
+          // 当前不是曲线的最后一段的情况，反转后的命令一定是 T
+          if (i !== 0) {
+            const newSegment = new PathSegment(
+              curSegment.end,
+              "T",
+              curSegment.start,
+            );
+            pathSegmentMap.set(indexInPathSegmentList, newSegment);
+            // 当前是曲线的最后一段的情况，反转后的的命令一定是 Q
+          } else {
+            const newSegment = new PathSegment(curSegment.end, "Q", [
+              ...controlPointTmp,
+              ...curSegment.start,
             ]);
-            const newTPathSegment = new PathSegment(joinPoint, "T", newEnd);
-            pathSegmentMap.set(smoothCurveIndex, newQPathSegment);
-            pathSegmentMap.set(smoothCurveIndex - 1, newTPathSegment);
+            pathSegmentMap.set(indexInPathSegmentList, newSegment);
+            curSegment;
           }
         }
       }

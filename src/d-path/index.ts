@@ -382,51 +382,158 @@ export class PathData extends PathDataCommon implements Operations<PathData> {
           break;
         }
       }
+      // T 命令是单独存在的情况
       if (seq.length <= 1) {
-        // 如果这个 T 命令是单独存在的，那么它反转后等同于 L 命令
         const singleTSegment = seq[0] as PathSegment<"T">;
-        const newSegment = new PathSegment(
-          singleTSegment.end,
-          "L",
-          singleTSegment.start,
-        );
+        const newStart = singleTSegment.end;
+        const newEnd = singleTSegment.start;
+        const newControlPoint = singleTSegment.start;
+        const newSegment = new PathSegment(newStart, "Q", [
+          ...newControlPoint,
+          ...newEnd,
+        ]);
         pathSegmentMap.set(segmentTIndex, newSegment);
+        // T 命令和其它二次贝塞尔曲线命令连续存在的情况
       } else {
         // startSegment 是这一系列平滑曲线的开头
         const startSegment = seq[seq.length - 1];
-        // controlPointTmp 用来缓存每一段二次贝塞尔曲线的控制点，它将影响下一段二次贝塞尔曲线的控制点的位置
+        // controlPointTmp 用来缓存每一段二次贝塞尔曲线的控制点，它将影响下一段平滑二次贝塞尔曲线的控制点的位置
         let controlPointTmp: Coord = checkPathSegmentType(startSegment, "Q")
           ? [startSegment.args[0], startSegment.args[1]]
           : startSegment.start;
-        // 从 seq 的尾部（但也是是曲线的头部）开始处理
+        // 从 seq 的尾部（也是曲线的头部）开始处理
         for (let i = seq.length - 1; i >= 0; i--) {
           const curSegment = seq[i];
           // 计算出 curSegment 在 pathSegmentList 中的序号
           const indexInPathSegmentList = segmentTIndex - i;
           // 当前曲线不是第一段的情况，控制点根据上一个控制点推算出来
-          if (i !== seq.length - 1) {
+          if (i < seq.length - 1) {
             // 用中心对称推算
             controlPointTmp = getPointReflection(
               controlPointTmp,
               curSegment.start,
             );
           }
+          const newStart = curSegment.end;
+          const newEnd = curSegment.start;
           // 当前不是曲线的最后一段的情况，反转后的命令一定是 T
           if (i !== 0) {
-            const newSegment = new PathSegment(
-              curSegment.end,
-              "T",
-              curSegment.start,
-            );
+            const newSegment = new PathSegment(newStart, "T", newEnd);
             pathSegmentMap.set(indexInPathSegmentList, newSegment);
             // 当前是曲线的最后一段的情况，反转后的的命令一定是 Q
           } else {
-            const newSegment = new PathSegment(curSegment.end, "Q", [
+            const newSegment = new PathSegment(newStart, "Q", [
               ...controlPointTmp,
-              ...curSegment.start,
+              ...newEnd,
             ]);
             pathSegmentMap.set(indexInPathSegmentList, newSegment);
             curSegment;
+          }
+        }
+      }
+    });
+    segmentSTail.forEach((segmentTIndex) => {
+      // 先在 pathSegmentList 中从 segmentT 开始往前找，直到遇到 T、Q 以外的命令，把找到的 segment 加入到 seq 中
+      const seq: (PathSegment<"S"> | PathSegment<"C">)[] = [];
+      for (let i = segmentTIndex; i >= 0; i--) {
+        const curSegment = this.pathSegmentList[i];
+        if (
+          checkPathSegmentType(curSegment, "S") ||
+          checkPathSegmentType(curSegment, "C")
+        ) {
+          seq.push(curSegment);
+        } else {
+          break;
+        }
+      }
+      // S 命令是单独存在的情况
+      if (seq.length <= 1) {
+        const singleTSegment = seq[0] as PathSegment<"S">;
+        const controlPoint1 = singleTSegment.start;
+        const controlPoint2: Coord = [
+          singleTSegment.args[0],
+          singleTSegment.args[1],
+        ];
+        const newStart = singleTSegment.end;
+        const newEnd = singleTSegment.start;
+        const newContorlPoint1 = controlPoint2;
+        const newContorlPoint2 = controlPoint1;
+        const newSegment = new PathSegment(newStart, "C", [
+          ...newContorlPoint1,
+          ...newContorlPoint2,
+          ...newEnd,
+        ]);
+        pathSegmentMap.set(segmentTIndex, newSegment);
+        // S 命令和其它三次贝塞尔曲线命令连续存在的情况
+      } else {
+        // 从 seq 的尾部（也是曲线的头部）开始处理
+        for (let i = seq.length - 1; i >= 0; i--) {
+          const curSegment = seq[i];
+          // 计算出 curSegment 在 pathSegmentList 中的序号
+          const indexInPathSegmentList = segmentTIndex - i;
+          const newStart = curSegment.end;
+          const newEnd = curSegment.start;
+          // 当前是曲线第一段的情况，反转后的命令一定是 S
+          if (i === seq.length - 1) {
+            let controlPoint1: Coord;
+            let controlPoint2: Coord;
+            if (checkPathSegmentType(curSegment, "C")) {
+              controlPoint1 = [curSegment.args[0], curSegment.args[1]];
+              controlPoint2 = [curSegment.args[2], curSegment.args[3]];
+            } else {
+              controlPoint1 = curSegment.start;
+              controlPoint2 = [curSegment.args[0], curSegment.args[1]];
+            }
+            const newControlPoint2 = controlPoint1;
+            const newSegment = new PathSegment(newStart, "S", [
+              ...newControlPoint2,
+              ...newEnd,
+            ]);
+            pathSegmentMap.set(indexInPathSegmentList, newSegment);
+            // 当前不是曲线的第一段也不是最后一段的情况，反转前和反转后的命令一定都是 S
+          } else if (i !== 0) {
+            const prevSegment = seq[i + 1]; // 曲线中的前一段，即 seq 中的后一段
+            let prevControlPoint2: Coord;
+            if (checkPathSegmentType(prevSegment, "C")) {
+              prevControlPoint2 = [prevSegment.args[2], prevSegment.args[3]];
+            } else {
+              prevControlPoint2 = [prevSegment.args[0], prevSegment.args[1]];
+            }
+            const controlPoint1 = getPointReflection(
+              prevControlPoint2,
+              curSegment.start,
+            );
+            const newControlPoint2 = controlPoint1;
+            const newSegment = new PathSegment(newStart, "S", [
+              ...newControlPoint2,
+              ...newEnd,
+            ]);
+            pathSegmentMap.set(indexInPathSegmentList, newSegment);
+            // 当前是曲线的最后一段的情况，反转前的命令一定是 S, 反转后的的命令一定是 C
+          } else {
+            const prevSegment = seq[i + 1]; // 曲线中的前一段，即 seq 中的后一段
+            let prevControlPoint2: Coord;
+            if (checkPathSegmentType(prevSegment, "C")) {
+              prevControlPoint2 = [prevSegment.args[2], prevSegment.args[3]];
+            } else {
+              prevControlPoint2 = [prevSegment.args[0], prevSegment.args[1]];
+            }
+            const controlPoint1 = getPointReflection(
+              prevControlPoint2,
+              curSegment.start,
+            );
+            const controlPoint2: Coord = [
+              curSegment.args[0],
+              curSegment.args[1],
+            ];
+            const newControlPoint1 = controlPoint2;
+            const newControlPoint2 = controlPoint1;
+            const newSegment = new PathSegment(newStart, "C", [
+              ...newControlPoint1,
+              ...newControlPoint2,
+              ...newEnd,
+            ]);
+            pathSegmentMap.set(indexInPathSegmentList, newSegment);
           }
         }
       }

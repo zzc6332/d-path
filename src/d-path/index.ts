@@ -476,13 +476,10 @@ export class PathData extends PathDataCommon implements Operations<PathData> {
           // 当前是曲线第一段的情况，反转后的命令一定是 S
           if (i === seq.length - 1) {
             let controlPoint1: Coord;
-            let controlPoint2: Coord;
             if (checkPathSegmentType(curSegment, "C")) {
               controlPoint1 = [curSegment.args[0], curSegment.args[1]];
-              controlPoint2 = [curSegment.args[2], curSegment.args[3]];
             } else {
               controlPoint1 = curSegment.start;
-              controlPoint2 = [curSegment.args[0], curSegment.args[1]];
             }
             const newControlPoint2 = controlPoint1;
             const newSegment = new PathSegment(newStart, "S", [

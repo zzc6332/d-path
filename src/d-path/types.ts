@@ -171,4 +171,7 @@ export interface pathSegmentInfo<C extends AbsoluteCommand = AbsoluteCommand> {
 export interface Operations<R> {
   move(vector: Vector): R;
   move(x: number, y: number): R;
+  copy(): R;
+  copy(vector: Vector): R;
+  copy(x: number, y: number): R;
 }

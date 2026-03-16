@@ -146,8 +146,6 @@ export function checkPathSegmentType<C extends AbsoluteCommand>(
  * @returns
  */
 export function getPointReflection(originPoint: Coord, centerPoint: Coord) {
-    console.log('originPoint',originPoint,'centerPoint',centerPoint)
   const vector = getOffsetVector(originPoint, centerPoint);
-  console.log('vector',vector)
   return offsetCoord(centerPoint, vector);
 }

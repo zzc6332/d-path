@@ -287,13 +287,30 @@ export class PathSegment<C extends AbsoluteCommand = AbsoluteCommand>
     }
     return this;
   };
+
+  public copy: Operations<PathSegment<C>>["copy"] = (...args: any[]) => {
+    let vector: Vector;
+    if (Array.isArray(args[0])) {
+      vector = args[0] as Vector;
+    } else if (typeof args[0] === "number" && typeof args[1] === "number") {
+      vector = [args[0], args[1]];
+    } else {
+      vector = [0, 0];
+    }
+    return new PathSegment(this.start, this.command, this.args).move(vector);
+  };
 }
 
 // PathData 代表一条完整的连续路径
 export class PathData extends PathDataCommon implements Operations<PathData> {
   private _pathSegmentList: PathSegment[];
 
-  constructor(start: Coord, command: AbsoluteCommand, args: any) {
+  constructor(
+    start: Coord,
+    command: AbsoluteCommand,
+    args: any,
+    private factory: DPath,
+  ) {
     super();
     this._pathSegmentList = [new PathSegment(start, command, args)];
   }
@@ -575,6 +592,22 @@ export class PathData extends PathDataCommon implements Operations<PathData> {
     });
     return this;
   };
+
+  public copy: Operations<PathData>["copy"] = (...args: any[]) => {
+    const headPathSegment = this.pathSegmentList[0];
+    const newPathData: PathData = (this.factory.create as any)(
+      headPathSegment.start,
+      headPathSegment.command,
+      ...headPathSegment.args,
+    );
+    this.pathSegmentList.forEach((pathSegment, index) => {
+      if (index !== 0) {
+        (newPathData.add as any)(pathSegment.command, ...pathSegment.args);
+      }
+    });
+    (newPathData.move as any)(...args);
+    return newPathData;
+  };
 }
 
 export class PathGroup
@@ -583,9 +616,16 @@ export class PathGroup
 {
   protected pathSet: Set<PathData | PathGroup>;
 
+  /**
+   * 创建 PathGroup
+   * @param pathList PathGroup 中包含的子路径
+   * @param topPathSet DPath 最顶层的 PathSet，当新的路径作为子路径加入 PathGroup 后，需要从最顶层的 PathSet 中去除
+   * @param factory 创建该 pathGroup 的 DPath 实例
+   */
   constructor(
     pathList: (PathData | PathGroup)[],
     topPathSet: Set<PathData | PathGroup>,
+    private factory: DPath,
   ) {
     super();
     this.pathSet = new Set();
@@ -602,6 +642,13 @@ export class PathGroup
       (item.move as any)(...args);
     });
     return this;
+  };
+
+  public copy: Operations<PathGroup>["copy"] = (...args: any[]) => {
+    const pathList = Array.from(this.pathSet).map((item) =>
+      (item.copy as any)(...args),
+    );
+    return new PathGroup(pathList, (this.factory as any).pathSet, this.factory);
   };
 }
 
@@ -624,7 +671,7 @@ export default class DPath extends PathGroupCommom {
     const { start, command, nativeDArgs } = createPathSegmentInfo(
       ...(args as Parameters<CreatePathOverloads>),
     );
-    const pathData = new PathData(start, command, nativeDArgs);
+    const pathData = new PathData(start, command, nativeDArgs, this);
     this.pathSet.add(pathData);
     return pathData;
   };
@@ -639,7 +686,7 @@ export default class DPath extends PathGroupCommom {
     } else {
       input = args as (PathData | PathGroup)[];
     }
-    const pathGroup = new PathGroup(input, this.pathSet);
+    const pathGroup = new PathGroup(input, this.pathSet, this);
     this.pathSet.add(pathGroup);
     return pathGroup;
   }

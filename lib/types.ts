@@ -1,4 +1,4 @@
-import { PathData, PathSegment } from "./index";
+import { PathData } from "./index";
 import type { TupleToIntersection, PrependParams } from "./utility-types";
 
 export type Coord = [number, number];

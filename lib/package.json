@@ -1,0 +1,15 @@
+{
+  "name": "d-path",
+  "version": "0.0.0",
+  "main": "./index.js",
+  "keywords": [],
+  "author": "zzc6332",
+  "license": "MIT",
+  "description": "",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "require": "./index.umd.cjs"
+    }
+  }
+}
